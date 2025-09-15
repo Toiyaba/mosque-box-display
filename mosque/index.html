@@ -1,0 +1,153 @@
+
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+  <meta charset="UTF-8">
+  <title>مسجد باکس — Manchester</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #000;
+      color: #fff;
+      font-family: 'Arial', sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    #clock {
+      font-size: 80px;
+      margin: 20px;
+    }
+    #date {
+      font-size: 40px;
+      margin: 10px;
+    }
+    #prayer-times {
+      font-size: 35px;
+      margin: 20px;
+      text-align: center;
+    }
+    .next-prayer {
+      font-size: 45px;
+      margin: 20px;
+      color: #ffcc00;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="clock">00:00:00</div>
+  <div id="date">لوڈ ہو رہا ہے تاریخ...</div>
+  <div id="prayer-times">لوڈ ہو رہا ہے نماز کے اوقات...</div>
+  <div class="next-prayer" id="next-prayer">اگلی نماز: --:--</div>
+
+  <script>
+    // Live Clock
+    function updateClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('clock').textContent = ${hours}:${minutes}:${seconds};
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Date (Gregorian + Hijri)
+    function updateDate() {
+      const now = new Date();
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      const dateGed = now.toLocaleDateString('en-GB', options);
+      let dateText = dateGed;
+
+      // Try Hijri (اگر براوزر سپورٹ کرے)
+      try {
+        const hijriDate = new Intl.DateTimeFormat('en-GB-u-ca-islamic', {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        }).format(now);
+        dateText += " / " + hijriDate;
+      } catch (e) {
+        // اگر نہ ہو سکے تو کچھ نہ کریں
+      }
+
+      document.getElementById('date').textContent = dateText;
+    }
+    setInterval(updateDate, 60000);
+    updateDate();
+
+    // نماز کے اوقات API سے لانا
+    let prayerTimes = {};  // قرآن اوقات محفوظ کرنے کیلئے
+
+    function fetchPrayerTimes() {
+      // Manchester, UK کے لیے API کال
+      const city = "Manchester";
+      const country = "UK";
+      const url = https://api.aladhan.com/v1/timingsByCity?city=${city}&country=${country}&method=2;
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          if (data.code === 200) {
+            prayerTimes = data.data.timings;
+            showPrayerTimes();
+            updateNextPrayer();
+          } else {
+            document.getElementById('prayer-times').textContent = "نماز اوقات حاصل نہ ہو سکے";
+          }
+        })
+        .catch(error => {
+          console.error("Error fetching prayer times:", error);
+          document.getElementById('prayer-times').textContent = "نماز اوقات حاصل کرنے میں خرابی";
+        });
+    }
+
+    function showPrayerTimes() {
+      let html = "";
+      // ترتیب کچھ ایسی رکھی کہ عمومی نمازیں آ جائیں
+      const order = ["Fajr","Dhuhr","Asr","Maghrib","Isha"];
+      order.forEach(name => {
+        if (prayerTimes[name]) {
+          html += <div>${name}: ${prayerTimes[name]}</div>;
+        }
+      });
+      document.getElementById('prayer-times').innerHTML = html;
+    }
+
+    // اگلی نماز کون سی ہے اور کتنی دیر باقی ہے
+    function updateNextPrayer() {
+      const now = new Date();
+      const today = now;
+      // parse نمازوں کے اوقات
+      const order = ["Fajr","Dhuhr","Asr","Maghrib","Isha"];
+      for (let name of order) {
+        const timeStr = prayerTimes[name];
+        if (!timeStr) continue;
+        const parts = timeStr.split(':');
+        const prayerDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), parseInt(parts[0]), parseInt(parts[1]));
+        if (prayerDate > now) {
+          const diffMs = prayerDate - now;
+          const diffH = Math.floor(diffMs / (1000 * 60 * 60));
+          const diffM = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+          const diffS = Math.floor((diffMs % (1000 * 60)) / 1000);
+          document.getElementById('next-prayer').textContent = اگلی نماز (${name}) میں ${diffH} گھنٹے ${diffM} منٹ ${diffS} سیکنڈ;
+          return;
+        }
+      }
+      // اگر آج کی آخری نماز ہو گئی ہو
+      document.getElementById('next-prayer').textContent = "آج کی تمام نمازیں ہو چکی ہیں";
+    }
+
+    // وقتاً فوقتاً API سے نماز کے اوقات ریفریش کریں (مثلاً ہر گھنٹے بعد یا ہر 30 منٹ بعد)
+    fetchPrayerTimes();
+    setInterval(fetchPrayerTimes, 60 * 60 * 1000); // ہر 1 گھنٹے بعد
+
+    // اگلی نماز کا countdown ہر سیکنڈ اپڈیٹ کریں
+    setInterval(updateNextPrayer, 1000);
+
+  </script>
+
+</body>
+</html>
